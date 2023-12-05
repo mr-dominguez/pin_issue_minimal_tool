@@ -28,7 +28,6 @@ ADDRINT alloc_size;
 bool found_alloc = false;
 int mmap_count = 1; // from previous experience we need the second instrumented mmap so we count them
 int merkle_tree_depth = 8;
-MerkleTree _merkleTree;
 
 std::string simulateHash(const std::string& input) {
     return input.substr(0, 4);
@@ -329,6 +328,8 @@ VOID ReplaceNonDeterministicRoutines(IMG img, VOID *v) {
         RTN_ReplaceSignature(rand_rtn, AFUNPTR(RandWrapper), IARG_END);
     }
 }
+
+MerkleTree _merkleTree;
 
 int main(int argc, char *argv[]) {
     PIN_InitSymbols();
