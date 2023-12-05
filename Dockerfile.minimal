@@ -1,0 +1,62 @@
+ARG BASE_OS="ubuntu:22.04"
+FROM ${BASE_OS}
+
+SHELL ["/bin/bash", "-c"] 
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt update && apt install -y \
+    apt-utils build-essential man wget git htop dstat procps gdb telnet time \
+    gcc g++ libevent-dev libfabric-dev libseccomp-dev autoconf automake \
+    pkg-config libglib2.0-dev libncurses5-dev libboost-all-dev \
+    asciidoc asciidoctor bash-completion xmlto libtool libglib2.0-0 libfabric1 \
+    graphviz libncurses5 libkmod2 libkmod-dev libudev-dev uuid-dev \
+    libjson-c-dev libkeyutils-dev pandoc cmake libelf-dev xxd libssl-dev xxhash
+
+# Install ndctl and daxctl
+RUN mkdir /downloads 
+RUN git clone https://github.com/pmem/ndctl /downloads/ndctl
+WORKDIR /downloads/ndctl
+RUN git checkout tags/v71.1
+RUN ./autogen.sh && \
+    apt install --reinstall -y systemd && \
+    ./configure CFLAGS='-g -O2' --prefix=/usr --sysconfdir=/etc --libdir=/usr/lib  && \
+    make -j$(nproc) && \
+    make install
+
+ENV ROOT=/home
+RUN mkdir $ROOT/tools
+WORKDIR $ROOT/tools
+
+# Download PIN
+ARG PIN_VERSION=pin-3.28-98749-g6643ecee5
+RUN wget -q http://software.intel.com/sites/landingpage/pintool/downloads/${PIN_VERSION}-gcc-linux.tar.gz && \
+    tar -xf ${PIN_VERSION}-gcc-linux.tar.gz && \
+    rm -f ${PIN_VERSION}-gcc-linux.tar.gz
+
+# Download PMDK
+RUN git clone https://github.com/pmem/pmdk.git
+WORKDIR $ROOT/tools/pmdk
+ARG PMDK_VERSION
+RUN test -n "$PMDK_VERSION"
+ARG REFRESH
+RUN git pull && git checkout ${PMDK_VERSION} 
+# Don't build documentation
+RUN touch .skip-doc
+RUN make EXTRA_CFLAGS="-Wno-error -g" -j$(nproc) && make install
+
+# Build tool
+RUN mkdir $ROOT/src
+COPY src/makefile $ROOT/src
+COPY src/makefile.rules $ROOT/src
+COPY src/minimal_tool.cpp $ROOT/src
+WORKDIR $ROOT/src
+ENV PIN_ROOT=$ROOT/tools/${PIN_VERSION}-gcc-linux
+ARG DEBUG=1
+RUN make clean && make DEBUG=${DEBUG}
+
+RUN ln -s $ROOT/tools/${PIN_VERSION}-gcc-linux/pin /usr/local/bin/pin
+RUN ln -s $ROOT/tools/pmdk/src/examples/libpmemobj/map/data_store /usr/local/bin/data_store
+
+ENV LD_PRELOAD=$ROOT/tools/pmdk/src/debug/libpmem.so.1:$ROOT/tools/pmdk/src/debug/libpmemobj.so.1
+ENV PMEM_IS_PMEM_FORCE=1
