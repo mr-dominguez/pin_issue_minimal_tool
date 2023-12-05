@@ -271,6 +271,8 @@ class MerkleTree {
         }
 };
 
+MerkleTree _merkleTree;
+
 void FPWriteHandler(ADDRINT address, uint32_t size, CONTEXT *ctxt) {
     _merkleTree.applyChange(filename, {address});
 }
@@ -328,8 +330,6 @@ VOID ReplaceNonDeterministicRoutines(IMG img, VOID *v) {
         RTN_ReplaceSignature(rand_rtn, AFUNPTR(RandWrapper), IARG_END);
     }
 }
-
-MerkleTree _merkleTree;
 
 int main(int argc, char *argv[]) {
     PIN_InitSymbols();
